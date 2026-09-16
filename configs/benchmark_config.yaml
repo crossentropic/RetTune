@@ -1,0 +1,48 @@
+# Master Configuration for RetTune
+seed: 42
+
+paths:
+  data_dir: "data"
+  results_dir: "results"
+
+active_datasets:
+  - "nfcorpus"
+  - "scifact"
+  - "arguana"
+
+datasets:
+  nfcorpus:
+    name: "nfcorpus"
+    hf_repo: "BeIR/nfcorpus"
+    hf_qrels_repo: "BeIR/nfcorpus-qrels"
+    qrels_dev_file: "qrels/dev.tsv"
+    qrels_test_file: "qrels/test.tsv"
+    relevance_threshold: 1.0
+    expected_docs: 3633
+    expected_dev_queries: 324
+    expected_test_queries: 323
+  scifact:
+    name: "scifact"
+    hf_repo: "BeIR/scifact"
+    hf_qrels_repo: "BeIR/scifact-qrels"
+    qrels_dev_file: "qrels/dev.tsv"
+    qrels_test_file: "qrels/test.tsv"
+    relevance_threshold: 1.0
+    expected_docs: 5183
+    expected_dev_queries: 300
+    expected_test_queries: 300
+  arguana:
+    name: "arguana"
+    hf_repo: "BeIR/arguana"
+    hf_qrels_repo: "BeIR/arguana-qrels"
+    qrels_dev_file: "qrels/dev.tsv"
+    qrels_test_file: "qrels/test.tsv"
+    relevance_threshold: 1.0
+    expected_docs: 8674
+    expected_dev_queries: 703
+    expected_test_queries: 703
+
+eda:
+  percentiles: [25, 50, 75, 90, 95, 99]
+  random_pairs_sample_size: 5000
+  token_pattern: "\\w+"
