@@ -164,6 +164,36 @@ def test_referential_integrity_missing_doc(tmp_path: Path, synthetic_benchmark_c
         load_dataset("synthetic", synthetic_benchmark_config, verify=True)
 
 
+def test_referential_integrity_missing_doc_tolerated_when_flag_disabled(
+    tmp_path: Path,
+    synthetic_benchmark_config: BenchmarkConfig,
+    dataset_writer,
+    caplog: pytest.LogCaptureFixture,
+):
+    """Verify missing doc in qrels is permitted with a warning when strict_doc_referential_integrity=False."""
+    import logging
+    bad_dev_qrels = [
+        ("query-id", "corpus-id", "score"),
+        ("q_dev_1", "NON_EXISTENT_DOC", 2.0),
+        ("q_dev_2", "doc_2", 1.0),
+    ]
+    dataset_dir = tmp_path / "data" / "synthetic"
+    dataset_writer(dataset_dir, qrels_dev=bad_dev_qrels)
+
+    # Disable strict_doc_referential_integrity on config
+    relaxed_ds_cfg = synthetic_benchmark_config.datasets["synthetic"].model_copy(
+        update={"strict_doc_referential_integrity": False}
+    )
+    relaxed_cfg = synthetic_benchmark_config.model_copy(
+        update={"datasets": {"synthetic": relaxed_ds_cfg}}
+    )
+
+    with caplog.at_level(logging.WARNING, logger="rettune.data_loader"):
+        ds = load_dataset("synthetic", relaxed_cfg, verify=True)
+        assert "synthetic" == ds.name
+        assert any("strict_doc_referential_integrity=False" in record.message for record in caplog.records)
+
+
 def test_referential_integrity_missing_query(tmp_path: Path, synthetic_benchmark_config: BenchmarkConfig, dataset_writer):
     """Verify ContractValidationError if qrel references a query missing from queries.jsonl."""
     bad_dev_qrels = [

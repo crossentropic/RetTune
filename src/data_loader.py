@@ -307,9 +307,14 @@ def verify_dataset_contract(dataset: IRDataset, config: DatasetConfig) -> None:
     missing_docs = all_qrel_docs - set(dataset.corpus.keys())
     if missing_docs:
         sample = sorted(list(missing_docs))[:5]
-        raise ContractValidationError(
-            f"Referential integrity failure in dataset '{dataset.name}': {len(missing_docs)} doc IDs in qrels missing from corpus. Sample: {sample}"
-        )
+        msg = f"Referential integrity failure in dataset '{dataset.name}': {len(missing_docs)} doc IDs in qrels missing from corpus. Sample: {sample}"
+        if config.strict_doc_referential_integrity:
+            raise ContractValidationError(msg)
+        else:
+            logger.warning(
+                "Document referential integrity discrepancy tolerated (strict_doc_referential_integrity=False): %s",
+                msg,
+            )
 
     # 2. Referential integrity: qrel queries must exist in queries
     all_qrel_qids = set(dataset.qrels_dev.keys()) | set(dataset.qrels_test.keys())

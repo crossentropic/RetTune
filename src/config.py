@@ -32,6 +32,11 @@ class DatasetConfig(BaseModel):
             e.g. in web-crawled datasets like NFCorpus) while still strictly enforcing
             query ID disjointness. Developers adding custom datasets with benign duplicate
             question strings across splits can set this to False.
+        strict_doc_referential_integrity: If True (default), enforces that every document ID
+            referenced in qrels must exist in the passage corpus. If False, tolerates known
+            upstream BEIR packaging anomalies (such as ArguAna, where 5 counter-arguments were
+            omitted from corpus.jsonl in the upstream release; BEIR issue #101) to preserve
+            exact 1:1 leaderboard reproduction without dropping queries.
     """
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -45,6 +50,7 @@ class DatasetConfig(BaseModel):
     expected_dev_queries: Optional[int] = None
     expected_test_queries: Optional[int] = None
     strict_text_disjointness: bool = True
+    strict_doc_referential_integrity: bool = True
 
     def get_qrels_path(self, dataset_dir: Path, split: str) -> Path:
         """Resolve qrels file path for a split ('dev' or 'test')."""
