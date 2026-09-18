@@ -21,6 +21,13 @@ datasets:
     expected_docs: 3633
     expected_dev_queries: 324
     expected_test_queries: 323
+    # Upstream NFCorpus has one duplicate user query string across splits ('Are Avocados Good for You?'
+    # under PLAIN-3341 in dev and PLAIN-3131 in test). They share 4 relevance judgments
+    # (MED-4618, MED-4619, MED-4620, MED-4621) with varying relevance grades.
+    # Setting strict_text_disjointness: false tolerates this known upstream BEIR artifact
+    # strictly to maintain 1:1 comparability with published benchmarks, while preserving
+    # strict query ID disjointness. Developers adding custom datasets can set this flag
+    # to false if their corpora contain benign query text collisions across splits.
     strict_text_disjointness: false
   scifact:
     name: "scifact"
