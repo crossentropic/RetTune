@@ -32,12 +32,19 @@ def test_load_default_config():
     assert nfc.expected_docs == 3633
     assert nfc.expected_dev_queries == 324
     assert nfc.expected_test_queries == 323
+    assert nfc.strict_text_disjointness is False
+
+    # Check SciFact defaults to strict
+    sci = config.datasets.get("scifact")
+    assert sci is not None
+    assert sci.strict_text_disjointness is True
 
     # Check ArguAna 1:1 balance
     arg = config.datasets.get("arguana")
     assert arg is not None
     assert arg.expected_dev_queries == 703
     assert arg.expected_test_queries == 703
+    assert arg.strict_text_disjointness is True
 
 
 def test_load_config_nonexistent():

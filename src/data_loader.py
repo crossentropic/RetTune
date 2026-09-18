@@ -3,11 +3,14 @@
 from collections import defaultdict
 from dataclasses import dataclass
 import json
+import logging
 import math
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional, Tuple
 
 from .config import BenchmarkConfig, DatasetConfig
+
+logger = logging.getLogger("rettune.data_loader")
 
 
 class ContractValidationError(ValueError):
@@ -232,8 +235,30 @@ def verify_split_leakage(
     qrels_dev: Dict[str, Dict[str, float]],
     qrels_test: Dict[str, Dict[str, float]],
     queries: Dict[str, str],
+    strict_text: bool = True,
 ) -> None:
-    """Verify that dev and test splits are strictly disjoint in IDs and normalized text."""
+    """Verify that dev and test splits do not contaminate each other.
+
+    Enforces two layers of leakage protection:
+    1. Query ID Disjointness: Strictly asserts Q_dev_id ∩ Q_test_id = ∅. This is always
+       enforced and cannot be disabled.
+    2. Query Text Disjointness: Asserts that normalized query strings in dev do not match
+       query strings in test, catching cases where identical questions were assigned different
+       IDs across splits.
+
+    Args:
+        qrels_dev: Mapping of dev query IDs to judged doc scores.
+        qrels_test: Mapping of test query IDs to judged doc scores.
+        queries: Global mapping of query ID to query text.
+        strict_text: If True, raises DataLeakageError when any dev query text matches a test
+            query text. If False, logs a warning and permits the collision (useful for real-world
+            crawled corpora like NFCorpus where multiple users asked identical questions).
+            Any developer configuring custom datasets can toggle this via
+            DatasetConfig.strict_text_disjointness.
+
+    Raises:
+        DataLeakageError: If query IDs overlap, or if query text overlaps and strict_text is True.
+    """
     dev_qids = set(qrels_dev.keys())
     test_qids = set(qrels_test.keys())
 
@@ -246,18 +271,28 @@ def verify_split_leakage(
         )
 
     # 2. Check Query Text disjointness (catches identical text under different IDs)
+    # Note: Punctuation is intentionally NOT stripped during normalization. In medical and
+    # scientific IR, punctuation (hyphens in drug/gene names, chemical formulas, quotes) conveys
+    # semantic specificity, so queries differing in punctuation represent distinct information needs.
     def normalize_text(t: str) -> str:
         return " ".join(t.lower().split())
 
     dev_texts = {normalize_text(queries[qid]): qid for qid in dev_qids if qid in queries}
-    for test_qid in test_qids:
+    collisions: List[Tuple[str, str, str]] = []
+    for test_qid in sorted(test_qids):
         if test_qid in queries:
             norm_test = normalize_text(queries[test_qid])
             if norm_test in dev_texts:
                 dev_qid = dev_texts[norm_test]
-                raise DataLeakageError(
-                    f"Query text leakage detected between dev query '{dev_qid}' and test query '{test_qid}': '{norm_test}'"
-                )
+                collisions.append((test_qid, dev_qid, norm_test))
+
+    if collisions:
+        sample = [f"dev '{d}' vs test '{t}' ('{txt}')" for t, d, txt in collisions[:5]]
+        msg = f"Query text leakage detected between dev and test: {len(collisions)} collision(s). Sample: {sample}"
+        if strict_text:
+            raise DataLeakageError(msg)
+        else:
+            logger.warning("Query text split collision tolerated (strict_text_disjointness=False): %s", msg)
 
 
 def verify_dataset_contract(dataset: IRDataset, config: DatasetConfig) -> None:
@@ -342,7 +377,12 @@ def load_dataset(
     )
 
     if verify:
-        verify_split_leakage(qrels_dev, qrels_test, queries)
+        verify_split_leakage(
+            qrels_dev,
+            qrels_test,
+            queries,
+            strict_text=dataset_cfg.strict_text_disjointness,
+        )
         verify_dataset_contract(dataset, dataset_cfg)
 
     return dataset

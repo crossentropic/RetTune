@@ -14,6 +14,25 @@ class PathsConfig(BaseModel):
 
 
 class DatasetConfig(BaseModel):
+    """Configuration for an individual IR dataset.
+
+    Attributes:
+        name: Unique dataset identifier.
+        hf_repo: Hugging Face repository containing corpus and queries.
+        hf_qrels_repo: Hugging Face repository containing relevance judgments.
+        qrels_dev_file: Relative path to the dev/validation qrels TSV.
+        qrels_test_file: Relative path to the test evaluation qrels TSV.
+        relevance_threshold: Minimum relevance score to consider a judgment positive.
+        expected_docs: Optional expected total document count for verification.
+        expected_dev_queries: Optional expected dev query count for verification.
+        expected_test_queries: Optional expected test query count for verification.
+        strict_text_disjointness: If True (default), enforces zero text overlap
+            between dev and test queries. If False, tolerates known upstream text
+            collisions (where distinct query IDs happen to have identical text strings,
+            e.g. in web-crawled datasets like NFCorpus) while still strictly enforcing
+            query ID disjointness. Developers adding custom datasets with benign duplicate
+            question strings across splits can set this to False.
+    """
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     name: str
@@ -25,6 +44,7 @@ class DatasetConfig(BaseModel):
     expected_docs: Optional[int] = None
     expected_dev_queries: Optional[int] = None
     expected_test_queries: Optional[int] = None
+    strict_text_disjointness: bool = True
 
     def get_qrels_path(self, dataset_dir: Path, split: str) -> Path:
         """Resolve qrels file path for a split ('dev' or 'test')."""

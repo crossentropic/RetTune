@@ -211,6 +211,64 @@ def test_data_leakage_query_text(tmp_path: Path, synthetic_benchmark_config: Ben
         load_dataset("synthetic", synthetic_benchmark_config, verify=True)
 
 
+def test_data_leakage_query_text_tolerated_when_flag_disabled(
+    tmp_path: Path, synthetic_benchmark_config: BenchmarkConfig, dataset_writer, caplog
+):
+    """Verify that when strict_text_disjointness is False, text collisions log a warning and succeed."""
+    queries_with_leak = [
+        {"_id": "q_dev_1", "text": "Machine Learning Passage"},
+        {"_id": "q_test_1", "text": "machine  learning   passage"},
+    ]
+    dev_qrels = [("query-id", "corpus-id", "score"), ("q_dev_1", "doc_1", 1.0)]
+    test_qrels = [("query-id", "corpus-id", "score"), ("q_test_1", "doc_3", 1.0)]
+
+    dataset_dir = tmp_path / "data" / "synthetic"
+    dataset_writer(
+        dataset_dir,
+        queries=queries_with_leak,
+        qrels_dev=dev_qrels,
+        qrels_test=test_qrels,
+    )
+
+    # Disable strict_text_disjointness on the dataset configuration
+    relaxed_cfg = synthetic_benchmark_config.datasets["synthetic"].model_copy(
+        update={"strict_text_disjointness": False, "expected_dev_queries": 1, "expected_test_queries": 1}
+    )
+    test_config = synthetic_benchmark_config.model_copy(
+        update={"datasets": {"synthetic": relaxed_cfg}}
+    )
+
+    # Should succeed without raising DataLeakageError and log a warning
+    with caplog.at_level("WARNING"):
+        ds = load_dataset("synthetic", test_config, verify=True)
+
+    assert ds is not None
+    assert "Query text split collision tolerated (strict_text_disjointness=False)" in caplog.text
+
+
+def test_id_leakage_still_enforced_when_text_disjointness_disabled(
+    tmp_path: Path, synthetic_benchmark_config: BenchmarkConfig, dataset_writer
+):
+    """Verify that Query ID leakage is strictly enforced even when text disjointness is relaxed."""
+    # query ID 'q_dev_1' is present in both dev and test qrels
+    leaked_test_qrels = [
+        ("query-id", "corpus-id", "score"),
+        ("q_dev_1", "doc_3", 1.0),
+    ]
+    dataset_dir = tmp_path / "data" / "synthetic"
+    dataset_writer(dataset_dir, qrels_test=leaked_test_qrels)
+
+    relaxed_cfg = synthetic_benchmark_config.datasets["synthetic"].model_copy(
+        update={"strict_text_disjointness": False}
+    )
+    test_config = synthetic_benchmark_config.model_copy(
+        update={"datasets": {"synthetic": relaxed_cfg}}
+    )
+
+    with pytest.raises(DataLeakageError, match="Query ID leakage detected between dev and test"):
+        load_dataset("synthetic", test_config, verify=True)
+
+
 def test_expected_counts_mismatch(tmp_path: Path, synthetic_benchmark_config: BenchmarkConfig):
     """Verify ContractValidationError if counts differ from config expectations."""
     # Modify config to expect 99 documents instead of 5
