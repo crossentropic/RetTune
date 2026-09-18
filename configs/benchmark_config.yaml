@@ -39,6 +39,12 @@ datasets:
     expected_docs: 5183
     expected_dev_queries: 300
     expected_test_queries: 300
+    # SciFact upstream test split (300 queries) is preserved byte-for-byte.
+    # Dev split (300 queries) is sampled deterministically from upstream train (809 queries).
+    # Two train queries that share claim text with test queries (QIDs 1291 and 871) are
+    # excluded upfront from the dev candidate pool, ensuring 100% strict query ID and
+    # query text disjointness across splits for any random seed.
+    strict_text_disjointness: true
   arguana:
     name: "arguana"
     hf_repo: "BeIR/arguana"
@@ -49,6 +55,18 @@ datasets:
     expected_docs: 8674
     expected_dev_queries: 703
     expected_test_queries: 703
+    # ArguAna upstream contains 1,406 test queries, with 108 arguments cross-posted
+    # across multiple debate categories. Ingestion uses group-aware clustering by normalized
+    # argument text so that cross-posted arguments are never split across dev and test.
+    # This guarantees 100% strict query ID and query text disjointness for any random seed,
+    # achieving an exact 703 dev / 703 test split.
+    strict_text_disjointness: true
+    # Upstream ArguAna release has a known data integrity issue (BEIR issue #101) where
+    # 5 judged counter-argument documents were omitted from corpus.jsonl in the original
+    # benchmark release. Setting strict_doc_referential_integrity: false tolerates this
+    # upstream anomaly to preserve 1:1 leaderboard parity (1,406 queries) while logging
+    # a warning.
+    strict_doc_referential_integrity: false
 
 eda:
   percentiles: [25, 50, 75, 90, 95, 99]

@@ -45,6 +45,7 @@ def test_load_default_config():
     assert arg.expected_dev_queries == 703
     assert arg.expected_test_queries == 703
     assert arg.strict_text_disjointness is True
+    assert arg.strict_doc_referential_integrity is False
 
 
 def test_load_config_nonexistent():
@@ -202,3 +203,18 @@ def test_find_default_config_from_subdir(tmp_path: Path, monkeypatch: pytest.Mon
     path = find_default_config()
     assert path.exists()
     assert path.name == "benchmark_config.yaml"
+
+
+def test_dataset_config_strict_text_disjointness_default():
+    """Verify DatasetConfig schema defaults strict_text_disjointness and doc referential integrity to True."""
+    from src.config import DatasetConfig
+    cfg = DatasetConfig(
+        name="custom_ds",
+        hf_repo="test/custom",
+        hf_qrels_repo="test/custom-qrels",
+        qrels_dev_file="qrels/dev.tsv",
+        qrels_test_file="qrels/test.tsv",
+        relevance_threshold=1.0,
+    )
+    assert cfg.strict_text_disjointness is True
+    assert cfg.strict_doc_referential_integrity is True
