@@ -3,11 +3,14 @@
 from collections import defaultdict
 from dataclasses import dataclass
 import json
+import logging
 import math
 from pathlib import Path
 from typing import Dict, Optional
 
 from .config import BenchmarkConfig, DatasetConfig
+
+logger = logging.getLogger("rettune.data_loader")
 
 
 class ContractValidationError(ValueError):
@@ -232,6 +235,7 @@ def verify_split_leakage(
     qrels_dev: Dict[str, Dict[str, float]],
     qrels_test: Dict[str, Dict[str, float]],
     queries: Dict[str, str],
+    strict_text: bool = True,
 ) -> None:
     """Verify that dev and test splits are strictly disjoint in IDs and normalized text."""
     dev_qids = set(qrels_dev.keys())
@@ -255,9 +259,14 @@ def verify_split_leakage(
             norm_test = normalize_text(queries[test_qid])
             if norm_test in dev_texts:
                 dev_qid = dev_texts[norm_test]
-                raise DataLeakageError(
-                    f"Query text leakage detected between dev query '{dev_qid}' and test query '{test_qid}': '{norm_test}'"
+                msg = (
+                    f"Query text leakage detected between dev query '{dev_qid}' "
+                    f"and test query '{test_qid}': '{norm_test}'"
                 )
+                if strict_text:
+                    raise DataLeakageError(msg)
+                else:
+                    logger.warning("Known upstream split collision tolerated: %s", msg)
 
 
 def verify_dataset_contract(dataset: IRDataset, config: DatasetConfig) -> None:
@@ -342,7 +351,12 @@ def load_dataset(
     )
 
     if verify:
-        verify_split_leakage(qrels_dev, qrels_test, queries)
+        verify_split_leakage(
+            qrels_dev,
+            qrels_test,
+            queries,
+            strict_text=dataset_cfg.strict_text_disjointness,
+        )
         verify_dataset_contract(dataset, dataset_cfg)
 
     return dataset

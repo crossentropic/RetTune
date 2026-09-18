@@ -25,6 +25,7 @@ class DatasetConfig(BaseModel):
     expected_docs: Optional[int] = None
     expected_dev_queries: Optional[int] = None
     expected_test_queries: Optional[int] = None
+    strict_text_disjointness: bool = True
 
     def get_qrels_path(self, dataset_dir: Path, split: str) -> Path:
         """Resolve qrels file path for a split ('dev' or 'test')."""

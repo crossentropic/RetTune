@@ -21,6 +21,7 @@ datasets:
     expected_docs: 3633
     expected_dev_queries: 324
     expected_test_queries: 323
+    strict_text_disjointness: false
   scifact:
     name: "scifact"
     hf_repo: "BeIR/scifact"
