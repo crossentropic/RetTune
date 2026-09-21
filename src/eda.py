@@ -23,7 +23,7 @@ import tempfile
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 import numpy as np
-from scipy.stats import skew, wasserstein_distance
+from scipy.stats import wasserstein_distance
 
 from .config import EDAConfig
 from .data_loader import Document, IRDataset
@@ -289,8 +289,8 @@ def compute_separation_metrics(
     delta_mean = mean_r - mean_b
     delta_median = float(np.median(r_arr) - np.median(b_arr))
 
-    # Guarded Cohen's d
-    if n_r + n_b < 2:
+    # Guarded Cohen's d (requires at least 1 degree of freedom: n_r + n_b - 2 >= 1 => n_r + n_b >= 3)
+    if n_r + n_b <= 2:
         cohens_d = 0.0
     else:
         var_r = float(np.var(r_arr, ddof=1)) if n_r > 1 else 0.0
@@ -451,13 +451,19 @@ def _atomic_write_text(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temp_dir = path.parent
     prefix = f".tmp_{path.name}_"
-    with tempfile.NamedTemporaryFile("w", dir=temp_dir, prefix=prefix, delete=False, encoding="utf-8") as tf:
-        temp_path = Path(tf.name)
-        tf.write(content)
-        tf.flush()
-        os.fsync(tf.fileno())
+    temp_path: Optional[Path] = None
+    try:
+        with tempfile.NamedTemporaryFile("w", dir=temp_dir, prefix=prefix, delete=False, encoding="utf-8") as tf:
+            temp_path = Path(tf.name)
+            tf.write(content)
+            tf.flush()
+            os.fsync(tf.fileno())
 
-    os.replace(temp_path, path)
+        os.replace(temp_path, path)
+    except Exception:
+        if temp_path is not None and temp_path.exists():
+            temp_path.unlink()
+        raise
 
 
 def export_eda_artifacts(profile: LexicalProfile, output_dir: Path | str) -> Dict[str, Path]:

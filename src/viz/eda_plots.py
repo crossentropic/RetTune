@@ -8,7 +8,7 @@ exclusively via the headless Matplotlib 'Agg' backend. It renders:
 
 import logging
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 
 import matplotlib
 # Enforce headless raster/vector rendering with zero X11/GUI display dependencies
@@ -59,12 +59,16 @@ def render_token_length_ecdf(
 
     Saves dual output: Scalable Vector Graphics (.svg) and high-res raster (.png).
     """
+    if not profiles:
+        logger.warning("No profiles provided to render_token_length_ecdf; skipping figure export.")
+        return {}
+
     _setup_figure_style()
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     dataset_names = list(profiles.keys())
-    n_panels = max(1, len(dataset_names))
+    n_panels = len(dataset_names)
 
     fig, axes = plt.subplots(
         nrows=1,
@@ -160,12 +164,16 @@ def render_coverage_density(
 
     Saves dual output: Scalable Vector Graphics (.svg) and high-res raster (.png).
     """
+    if not profiles:
+        logger.warning("No profiles provided to render_coverage_density; skipping figure export.")
+        return {}
+
     _setup_figure_style()
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     dataset_names = list(profiles.keys())
-    n_panels = max(1, len(dataset_names))
+    n_panels = len(dataset_names)
 
     fig, axes = plt.subplots(
         nrows=1,

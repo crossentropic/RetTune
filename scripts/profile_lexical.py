@@ -11,7 +11,7 @@ import argparse
 import logging
 from pathlib import Path
 import sys
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, Optional, Sequence
 
 # Ensure repository root is on sys.path for direct script execution
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -161,6 +161,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     except Exception as exc:
         logger.error("Failed to load configuration: %s", exc)
         return 1
+
+    # If custom relevance threshold requested via CLI, override across active datasets before loading
+    if args.relevance_threshold is not None:
+        updated_datasets = {
+            name: ds_cfg.model_copy(update={"relevance_threshold": args.relevance_threshold})
+            for name, ds_cfg in config.datasets.items()
+        }
+        config = config.model_copy(update={"datasets": updated_datasets})
 
     # Determine target datasets
     if args.dataset == "all":

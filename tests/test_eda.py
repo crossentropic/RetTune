@@ -171,6 +171,12 @@ def test_separation_metrics_edge_cases():
     assert sep_ident.cohens_d == 0.0
     assert sep_ident.wasserstein_distance == 0.0
 
+    # Single element sample (n_r=1, n_b=1 => df=0 => guarded to 0.0 without ZeroDivisionError)
+    sep_single = compute_separation_metrics([0.8], [0.2])
+    assert sep_single.cohens_d == 0.0
+    assert pytest.approx(sep_single.delta_mean, rel=1e-5) == 0.6
+    assert pytest.approx(sep_single.wasserstein_distance, rel=1e-5) == 0.6
+
     # Large separation
     rel = [0.8, 0.85, 0.9, 0.95]
     bg = [0.0, 0.05, 0.1, 0.15]
@@ -240,6 +246,10 @@ def test_viz_rendering(synthetic_benchmark_config: BenchmarkConfig, tmp_path: Pa
     assert cov_figs["png"].exists()
     assert cov_figs["svg"].stat().st_size > 1000
     assert cov_figs["png"].stat().st_size > 1000
+
+    # Empty profiles guard
+    assert render_token_length_ecdf({}, figures_dir) == {}
+    assert render_coverage_density({}, figures_dir) == {}
 
 
 def test_profile_lexical_cli_in_process(synthetic_benchmark_config: BenchmarkConfig, tmp_path: Path):
