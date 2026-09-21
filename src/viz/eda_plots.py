@@ -7,6 +7,7 @@ exclusively via the headless Matplotlib 'Agg' backend. It renders:
 """
 
 import logging
+import math
 from pathlib import Path
 from typing import Dict, Tuple
 
@@ -70,18 +71,33 @@ def render_token_length_ecdf(
     dataset_names = list(profiles.keys())
     n_panels = len(dataset_names)
 
+    ncols = min(n_panels, 3)
+    nrows = math.ceil(n_panels / ncols)
+
     fig, axes = plt.subplots(
-        nrows=1,
-        ncols=n_panels,
-        figsize=(5.5 * n_panels, 4.5),
-        sharey=True,
+        nrows=nrows,
+        ncols=ncols,
+        figsize=(5.5 * ncols, 4.5 * nrows),
+        sharey=(nrows == 1),
         constrained_layout=True,
     )
-    if n_panels == 1:
-        axes = [axes]
+    if isinstance(axes, np.ndarray):
+        ax_list = axes.flatten().tolist()
+    else:
+        ax_list = [axes]
+
+    for extra_ax in ax_list[n_panels:]:
+        extra_ax.set_visible(False)
+
+    # Derive dynamic upper bound across all profiles (rounded up to next power of 10)
+    max_observed = max(
+        (max(p.doc_summary.max, p.query_summary_all.max) for p in profiles.values()),
+        default=1000.0,
+    )
+    right_bound = max(1000.0, 10 ** math.ceil(math.log10(max(max_observed, 10.0))))
 
     try:
-        for idx, (ax, name) in enumerate(zip(axes, dataset_names)):
+        for idx, (ax, name) in enumerate(zip(ax_list[:n_panels], dataset_names)):
             prof = profiles[name]
 
             # 1. Plot ECDF for passages
@@ -120,17 +136,23 @@ def render_token_length_ecdf(
                 alpha=0.6,
                 label=f"Passage avgdl ({prof.doc_summary.mean:.1f})",
             )
-            p99_val = prof.doc_summary.percentiles.get("p99", prof.doc_summary.max)
+            if "p99" in prof.doc_summary.percentiles:
+                p99_val = prof.doc_summary.percentiles["p99"]
+                p99_label = f"Passage p99 ({p99_val:.0f})"
+            else:
+                p99_val = prof.doc_summary.max
+                p99_label = f"Passage max ({p99_val:.0f})"
+
             ax.axvline(
                 p99_val,
                 color="#d62728",
                 linestyle=":",
                 alpha=0.7,
-                label=f"Passage p99 ({p99_val:.0f})",
+                label=p99_label,
             )
 
             ax.set_xscale("log")
-            ax.set_xlim(left=1.0, right=10000.0)
+            ax.set_xlim(left=1.0, right=right_bound)
             ax.set_ylim(-0.02, 1.02)
             ax.grid(True, alpha=0.5)
 
@@ -175,21 +197,29 @@ def render_coverage_density(
     dataset_names = list(profiles.keys())
     n_panels = len(dataset_names)
 
+    ncols = min(n_panels, 3)
+    nrows = math.ceil(n_panels / ncols)
+
     fig, axes = plt.subplots(
-        nrows=1,
-        ncols=n_panels,
-        figsize=(5.5 * n_panels, 4.5),
+        nrows=nrows,
+        ncols=ncols,
+        figsize=(5.5 * ncols, 4.5 * nrows),
         sharey=False,
         constrained_layout=True,
     )
-    if n_panels == 1:
-        axes = [axes]
+    if isinstance(axes, np.ndarray):
+        ax_list = axes.flatten().tolist()
+    else:
+        ax_list = [axes]
+
+    for extra_ax in ax_list[n_panels:]:
+        extra_ax.set_visible(False)
 
     # 50 uniform bins strictly clamped in [0.0, 1.0] to preserve point mass at 0.0
     bins = np.linspace(0.0, 1.0, 51)
 
     try:
-        for idx, (ax, name) in enumerate(zip(axes, dataset_names)):
+        for idx, (ax, name) in enumerate(zip(ax_list[:n_panels], dataset_names)):
             prof = profiles[name]
 
             # 1. Random background null distribution
