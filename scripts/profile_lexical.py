@@ -86,12 +86,13 @@ def display_length_summary_table(profiles: Dict[str, LexicalProfile]) -> None:
     )
     table.add_column("Dataset", style="bold white")
     table.add_column("Unit", style="cyan")
-    table.add_column("Count (N)", justify="right")
-    table.add_column("Mean", justify="right")
-    table.add_column("Median", justify="right")
-    table.add_column("IQR", justify="right")
-    table.add_column("p95", justify="right")
-    table.add_column("p99", justify="right")
+    table.add_column("Items (N)", justify="right")
+    table.add_column("Mean (w)", justify="right")
+    table.add_column("Med (w)", justify="right")
+    table.add_column("IQR (w)", justify="right")
+    table.add_column("p95 (w)", justify="right")
+    table.add_column("p99 (w)", justify="right")
+    table.add_column("Max (w)", justify="right")
     table.add_column("Skewness (g₁)", justify="right")
 
     for ds_name, prof in profiles.items():
@@ -112,7 +113,8 @@ def display_length_summary_table(profiles: Dict[str, LexicalProfile]) -> None:
                 f"{summary.median:.1f}",
                 f"{summary.iqr:.1f}",
                 f"{summary.percentiles.get('p95', 0.0):.1f}",
-                f"{summary.percentiles.get('p99', 0.0):.1f}",
+                f"{summary.percentiles.get('p99', summary.max):.1f}",
+                f"{summary.max:.1f}",
                 f"[{skew_style}]{summary.skewness:.2f}[/{skew_style}]",
             )
         table.add_section()
@@ -128,11 +130,11 @@ def display_coverage_summary_table(profiles: Dict[str, LexicalProfile]) -> None:
     )
     table.add_column("Dataset", style="bold white")
     table.add_column("Rel Pairs", justify="right")
-    table.add_column("Rel Mean", justify="right")
-    table.add_column("Rel Med", justify="right")
-    table.add_column("Noise Med", justify="right")
-    table.add_column("Δ Median", justify="right", style="bold yellow")
-    table.add_column("Cohen's d", justify="right", style="bold green")
+    table.add_column("Rel Mean (%)", justify="right")
+    table.add_column("Rel Med (%)", justify="right")
+    table.add_column("Noise Med (%)", justify="right")
+    table.add_column("Δ Med (%)", justify="right", style="bold yellow")
+    table.add_column("Cohen's d (σ)", justify="right", style="bold green")
     table.add_column("Wasserstein (W₁)", justify="right", style="bold magenta")
 
     for ds_name, prof in profiles.items():
@@ -143,10 +145,10 @@ def display_coverage_summary_table(profiles: Dict[str, LexicalProfile]) -> None:
         table.add_row(
             ds_name.upper(),
             f"{rel.count:,}",
-            f"{rel.mean:.3f}",
-            f"{rel.median:.3f}",
-            f"{bg.median:.3f}",
-            f"{sep.delta_median:+.3f}",
+            f"{rel.mean * 100:.1f}",
+            f"{rel.median * 100:.1f}",
+            f"{bg.median * 100:.1f}",
+            f"{sep.delta_median * 100:+.1f}",
             f"{sep.cohens_d:.2f}",
             f"{sep.wasserstein_distance:.3f}",
         )

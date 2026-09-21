@@ -158,7 +158,7 @@ def render_token_length_ecdf(
 
             skew_str = f"Skewness g₁ = {prof.doc_summary.skewness:.2f}"
             ax.set_title(f"{name.upper()}\n({skew_str})", fontsize=11, fontweight="bold")
-            ax.set_xlabel("Token Length (Log₁₀ Scale)", fontsize=10)
+            ax.set_xlabel("Word Length (Log₁₀ Scale)", fontsize=10)
             if idx == 0:
                 ax.set_ylabel("Empirical Cumulative Probability (ECDF)", fontsize=10)
 
@@ -284,7 +284,7 @@ def render_summary_table(
     output_dir: Path | str,
     filename_stem: str = "eda_summary_table",
 ) -> Dict[str, Path]:
-    """Render publication-grade graphic summary tables (Length Dynamics & Separation).
+    """Render publication-grade graphic summary tables with clear units.
 
     Saves dual output: Scalable Vector Graphics (.svg) and high-res raster (.png).
     """
@@ -296,8 +296,11 @@ def render_summary_table(
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1. Build Table 1 Rows (Length Dynamics)
-    col_labels_1 = ["Dataset", "Unit", "Count (N)", "Mean", "Median", "IQR", "p95", "p99", "Skewness (g₁)"]
+    # 1. Build Table 1 Rows (Length Dynamics - Words per Item)
+    col_labels_1 = [
+        "Dataset", "Unit", "Items (N)", "Mean (w)", "Med (w)",
+        "IQR (w)", "p95 (w)", "p99 (w)", "Max (w)", "Skewness (g₁)"
+    ]
     rows_1: list[list[str]] = []
     for ds_name, prof in profiles.items():
         units = [
@@ -316,11 +319,15 @@ def render_summary_table(
                 f"{summary.iqr:.1f}",
                 f"{summary.percentiles.get('p95', 0.0):.1f}",
                 f"{p99_val:.1f}",
+                f"{summary.max:.1f}",
                 f"{summary.skewness:.2f}",
             ])
 
-    # 2. Build Table 2 Rows (Coverage & Separation)
-    col_labels_2 = ["Dataset", "Rel Pairs", "Rel Mean", "Rel Med", "Noise Med", "Δ Median", "Cohen's d", "Wasserstein (W₁)"]
+    # 2. Build Table 2 Rows (Coverage & Separation - Units in headers, bare numbers in cells)
+    col_labels_2 = [
+        "Dataset", "Rel Pairs", "Rel Mean (%)", "Rel Med (%)",
+        "Noise Med (%)", "Δ Med (%)", "Cohen's d (σ)", "Wasserstein (W₁)"
+    ]
     rows_2: list[list[str]] = []
     for ds_name, prof in profiles.items():
         rel = prof.coverage_summary_relevant_all
@@ -329,19 +336,18 @@ def render_summary_table(
         rows_2.append([
             ds_name.upper(),
             f"{rel.count:,}",
-            f"{rel.mean:.3f}",
-            f"{rel.median:.3f}",
-            f"{bg.median:.3f}",
-            f"{sep.delta_median:+.3f}",
+            f"{rel.mean * 100:.1f}",
+            f"{rel.median * 100:.1f}",
+            f"{bg.median * 100:.1f}",
+            f"{sep.delta_median * 100:+.1f}",
             f"{sep.cohens_d:.2f}",
             f"{sep.wasserstein_distance:.3f}",
         ])
 
     fig, (ax1, ax2) = plt.subplots(
         2, 1,
-        figsize=(11, max(5.0, 1.8 + 0.42 * (len(rows_1) + len(rows_2)))),
-        gridspec_kw={"height_ratios": [max(1.2, len(rows_1) * 0.45), max(1.0, len(rows_2) * 0.45)]},
-        constrained_layout=True,
+        figsize=(11.5, max(5.2, 1.8 + 0.45 * (len(rows_1) + len(rows_2)))),
+        gridspec_kw={"height_ratios": [max(1.3, len(rows_1) * 0.45), max(1.0, len(rows_2) * 0.45)]},
     )
     ax1.axis("off")
     ax2.axis("off")
@@ -351,7 +357,7 @@ def render_summary_table(
         t1 = ax1.table(cellText=rows_1, colLabels=col_labels_1, loc="center", cellLoc="center")
         t1.auto_set_font_size(False)
         t1.set_fontsize(9.5)
-        t1.scale(1.0, 1.45)
+        t1.scale(1.0, 1.5)
 
         for (row, col), cell in t1.get_celld().items():
             cell.set_edgecolor("#cbd5e1")
@@ -361,11 +367,11 @@ def render_summary_table(
                 cell.get_text().set_color("white")
                 cell.get_text().set_weight("bold")
             else:
-                bg = "#ffffff" if (row // 2) % 2 == 0 else "#f8fafc"
+                bg = "#ffffff" if ((row - 1) // 2) % 2 == 0 else "#f8fafc"
                 cell.set_facecolor(bg)
-                if col == 8:
+                if col == 9:  # Skewness
                     try:
-                        skew_val = float(rows_1[row - 1][8])
+                        skew_val = float(rows_1[row - 1][9])
                         if skew_val > 2.0:
                             cell.set_facecolor("#fee2e2")
                             cell.get_text().set_color("#991b1b")
@@ -379,7 +385,7 @@ def render_summary_table(
         t2 = ax2.table(cellText=rows_2, colLabels=col_labels_2, loc="center", cellLoc="center")
         t2.auto_set_font_size(False)
         t2.set_fontsize(9.5)
-        t2.scale(1.0, 1.45)
+        t2.scale(1.0, 1.5)
 
         for (row, col), cell in t2.get_celld().items():
             cell.set_edgecolor("#cbd5e1")
@@ -402,16 +408,17 @@ def render_summary_table(
                         pass
                 elif col == 5:  # Delta Median
                     try:
-                        delta_val = float(rows_2[row - 1][5])
-                        if delta_val > 0.2:
+                        delta_val = float(rows_2[row - 1][5].replace("+", ""))
+                        if delta_val > 20.0:
                             cell.set_facecolor("#fef3c7")
                             cell.get_text().set_color("#92400e")
                             cell.get_text().set_weight("bold")
                     except ValueError:
                         pass
 
-        ax2.set_title("Table 2: IDF-Weighted Coverage & Separation (Signal vs. Noise Floor)", fontsize=11, fontweight="bold", pad=10, loc="left")
+        ax2.set_title("Table 2: IDF-Weighted Query Coverage & Separation vs. Noise Floor", fontsize=11, fontweight="bold", pad=10, loc="left")
 
+        fig.tight_layout()
         svg_path = out_dir / f"{filename_stem}.svg"
         png_path = out_dir / f"{filename_stem}.png"
 
