@@ -1,5 +1,0 @@
-metric,relevant_all,relevant_dev,relevant_test
-delta_mean,0.1105,0.1130,0.1082
-delta_median,0.0000,0.0000,0.0000
-cohens_d,0.4216,0.4648,0.4402
-wasserstein_distance,0.1105,0.1130,0.1082

@@ -24,7 +24,11 @@ from rich.table import Table
 from rettune.config import BenchmarkConfig, load_config
 from rettune.data_loader import ContractValidationError, DataLeakageError, load_dataset
 from rettune.eda import LexicalProfile, export_eda_artifacts, profile_dataset
-from rettune.viz import render_coverage_density, render_token_length_ecdf
+from rettune.viz import (
+    render_coverage_density,
+    render_summary_table,
+    render_token_length_ecdf,
+)
 
 logger = logging.getLogger("rettune.profile_lexical")
 console = Console()
@@ -230,11 +234,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         try:
             len_figs = render_token_length_ecdf(profiles, figures_dir)
             cov_figs = render_coverage_density(profiles, figures_dir)
+            tbl_figs = render_summary_table(profiles, figures_dir)
             console.print(
                 f"[bold green]✓ Figures successfully exported to {figures_dir}[/bold green]"
             )
             console.print(f"  - Length Distributions: {len_figs['svg'].name}, {len_figs['png'].name}")
             console.print(f"  - Coverage Density:     {cov_figs['svg'].name}, {cov_figs['png'].name}")
+            console.print(f"  - Summary Tables:       {tbl_figs['svg'].name}, {tbl_figs['png'].name}")
         except Exception as exc:
             logger.error("Failed to render graphical figures: %s", exc)
             return 1

@@ -277,3 +277,149 @@ def render_coverage_density(
 
     finally:
         plt.close(fig)
+
+
+def render_summary_table(
+    profiles: Dict[str, LexicalProfile],
+    output_dir: Path | str,
+    filename_stem: str = "eda_summary_table",
+) -> Dict[str, Path]:
+    """Render publication-grade graphic summary tables (Length Dynamics & Separation).
+
+    Saves dual output: Scalable Vector Graphics (.svg) and high-res raster (.png).
+    """
+    if not profiles:
+        logger.warning("No profiles provided to render_summary_table; skipping table export.")
+        return {}
+
+    _setup_figure_style()
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # 1. Build Table 1 Rows (Length Dynamics)
+    col_labels_1 = ["Dataset", "Unit", "Count (N)", "Mean", "Median", "IQR", "p95", "p99", "Skewness (g₁)"]
+    rows_1: list[list[str]] = []
+    for ds_name, prof in profiles.items():
+        units = [
+            ("Passages", prof.doc_summary),
+            ("Queries (All)", prof.query_summary_all),
+        ]
+        for idx, (unit_label, summary) in enumerate(units):
+            ds_col = ds_name.upper() if idx == 0 else ""
+            p99_val = summary.percentiles.get("p99", summary.max)
+            rows_1.append([
+                ds_col,
+                unit_label,
+                f"{summary.count:,}",
+                f"{summary.mean:.1f}",
+                f"{summary.median:.1f}",
+                f"{summary.iqr:.1f}",
+                f"{summary.percentiles.get('p95', 0.0):.1f}",
+                f"{p99_val:.1f}",
+                f"{summary.skewness:.2f}",
+            ])
+
+    # 2. Build Table 2 Rows (Coverage & Separation)
+    col_labels_2 = ["Dataset", "Rel Pairs", "Rel Mean", "Rel Med", "Noise Med", "Δ Median", "Cohen's d", "Wasserstein (W₁)"]
+    rows_2: list[list[str]] = []
+    for ds_name, prof in profiles.items():
+        rel = prof.coverage_summary_relevant_all
+        bg = prof.coverage_summary_random
+        sep = prof.separation_all
+        rows_2.append([
+            ds_name.upper(),
+            f"{rel.count:,}",
+            f"{rel.mean:.3f}",
+            f"{rel.median:.3f}",
+            f"{bg.median:.3f}",
+            f"{sep.delta_median:+.3f}",
+            f"{sep.cohens_d:.2f}",
+            f"{sep.wasserstein_distance:.3f}",
+        ])
+
+    fig, (ax1, ax2) = plt.subplots(
+        2, 1,
+        figsize=(11, max(5.0, 1.8 + 0.42 * (len(rows_1) + len(rows_2)))),
+        gridspec_kw={"height_ratios": [max(1.2, len(rows_1) * 0.45), max(1.0, len(rows_2) * 0.45)]},
+        constrained_layout=True,
+    )
+    ax1.axis("off")
+    ax2.axis("off")
+
+    try:
+        # Table 1: Length Dynamics
+        t1 = ax1.table(cellText=rows_1, colLabels=col_labels_1, loc="center", cellLoc="center")
+        t1.auto_set_font_size(False)
+        t1.set_fontsize(9.5)
+        t1.scale(1.0, 1.45)
+
+        for (row, col), cell in t1.get_celld().items():
+            cell.set_edgecolor("#cbd5e1")
+            cell.set_linewidth(0.6)
+            if row == 0:
+                cell.set_facecolor("#1e293b")
+                cell.get_text().set_color("white")
+                cell.get_text().set_weight("bold")
+            else:
+                bg = "#ffffff" if (row // 2) % 2 == 0 else "#f8fafc"
+                cell.set_facecolor(bg)
+                if col == 8:
+                    try:
+                        skew_val = float(rows_1[row - 1][8])
+                        if skew_val > 2.0:
+                            cell.set_facecolor("#fee2e2")
+                            cell.get_text().set_color("#991b1b")
+                            cell.get_text().set_weight("bold")
+                    except ValueError:
+                        pass
+
+        ax1.set_title("Table 1: Corpus & Query Length Dynamics", fontsize=11, fontweight="bold", pad=10, loc="left")
+
+        # Table 2: Separation
+        t2 = ax2.table(cellText=rows_2, colLabels=col_labels_2, loc="center", cellLoc="center")
+        t2.auto_set_font_size(False)
+        t2.set_fontsize(9.5)
+        t2.scale(1.0, 1.45)
+
+        for (row, col), cell in t2.get_celld().items():
+            cell.set_edgecolor("#cbd5e1")
+            cell.set_linewidth(0.6)
+            if row == 0:
+                cell.set_facecolor("#1e293b")
+                cell.get_text().set_color("white")
+                cell.get_text().set_weight("bold")
+            else:
+                bg = "#ffffff" if row % 2 == 1 else "#f8fafc"
+                cell.set_facecolor(bg)
+                if col == 6:  # Cohen's d
+                    try:
+                        d_val = float(rows_2[row - 1][6])
+                        if d_val > 2.0:
+                            cell.set_facecolor("#dcfce7")
+                            cell.get_text().set_color("#166534")
+                            cell.get_text().set_weight("bold")
+                    except ValueError:
+                        pass
+                elif col == 5:  # Delta Median
+                    try:
+                        delta_val = float(rows_2[row - 1][5])
+                        if delta_val > 0.2:
+                            cell.set_facecolor("#fef3c7")
+                            cell.get_text().set_color("#92400e")
+                            cell.get_text().set_weight("bold")
+                    except ValueError:
+                        pass
+
+        ax2.set_title("Table 2: IDF-Weighted Coverage & Separation (Signal vs. Noise Floor)", fontsize=11, fontweight="bold", pad=10, loc="left")
+
+        svg_path = out_dir / f"{filename_stem}.svg"
+        png_path = out_dir / f"{filename_stem}.png"
+
+        fig.savefig(svg_path, format="svg", metadata={"Date": None})
+        fig.savefig(png_path, format="png", dpi=200, bbox_inches="tight")
+        logger.info("Exported summary table to %s and %s", svg_path, png_path)
+
+        return {"svg": svg_path, "png": png_path}
+
+    finally:
+        plt.close(fig)

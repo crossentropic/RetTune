@@ -467,86 +467,10 @@ def _atomic_write_text(path: Path, content: str) -> None:
 
 
 def export_eda_artifacts(profile: LexicalProfile, output_dir: Path | str) -> Dict[str, Path]:
-    """Export standardized CSV tables and JSON telemetry to output directory."""
+    """Export standardized JSON telemetry snapshot to output directory."""
     out_path = Path(output_dir)
     out_path.mkdir(parents=True, exist_ok=True)
 
-    # 1. length_summary.csv
-    length_rows = [
-        ("passages", profile.doc_summary),
-        ("queries_dev", profile.query_summary_dev),
-        ("queries_test", profile.query_summary_test),
-        ("queries_all", profile.query_summary_all),
-    ]
-
-    header_cols = ["unit", "count", "mean", "std", "median", "iqr", "skewness", "min", "max"]
-    pct_keys = sorted(profile.doc_summary.percentiles.keys(), key=lambda x: int(x.lstrip("p")))
-    header_cols.extend(pct_keys)
-
-    lines_length = [",".join(header_cols)]
-    for unit_name, summary in length_rows:
-        row = [
-            unit_name,
-            str(summary.count),
-            f"{summary.mean:.4f}",
-            f"{summary.std:.4f}",
-            f"{summary.median:.4f}",
-            f"{summary.iqr:.4f}",
-            f"{summary.skewness:.4f}",
-            f"{summary.min:.4f}",
-            f"{summary.max:.4f}",
-        ]
-        for pk in pct_keys:
-            row.append(f"{summary.percentiles.get(pk, 0.0):.4f}")
-        lines_length.append(",".join(row))
-
-    length_csv_path = out_path / "length_summary.csv"
-    _atomic_write_text(length_csv_path, "\n".join(lines_length) + "\n")
-
-    # 2. idf_coverage.csv
-    cov_rows = [
-        ("relevant_dev", profile.coverage_summary_relevant_dev),
-        ("relevant_test", profile.coverage_summary_relevant_test),
-        ("relevant_all", profile.coverage_summary_relevant_all),
-        ("random_background", profile.coverage_summary_random),
-    ]
-
-    cov_header = ["pair_type", "count", "mean", "std", "median", "iqr", "skewness", "min", "max"]
-    cov_header.extend(pct_keys)
-
-    lines_cov = [",".join(cov_header)]
-    for pair_type, summary in cov_rows:
-        row = [
-            pair_type,
-            str(summary.count),
-            f"{summary.mean:.4f}",
-            f"{summary.std:.4f}",
-            f"{summary.median:.4f}",
-            f"{summary.iqr:.4f}",
-            f"{summary.skewness:.4f}",
-            f"{summary.min:.4f}",
-            f"{summary.max:.4f}",
-        ]
-        for pk in pct_keys:
-            row.append(f"{summary.percentiles.get(pk, 0.0):.4f}")
-        lines_cov.append(",".join(row))
-
-    cov_csv_path = out_path / "idf_coverage.csv"
-    _atomic_write_text(cov_csv_path, "\n".join(lines_cov) + "\n")
-
-    # 3. separation_metrics.csv
-    sep_lines = [
-        "metric,relevant_all,relevant_dev,relevant_test",
-        f"delta_mean,{profile.separation_all.delta_mean:.4f},{profile.separation_dev.delta_mean:.4f},{profile.separation_test.delta_mean:.4f}",
-        f"delta_median,{profile.separation_all.delta_median:.4f},{profile.separation_dev.delta_median:.4f},{profile.separation_test.delta_median:.4f}",
-        f"cohens_d,{profile.separation_all.cohens_d:.4f},{profile.separation_dev.cohens_d:.4f},{profile.separation_test.cohens_d:.4f}",
-        f"wasserstein_distance,{profile.separation_all.wasserstein_distance:.4f},{profile.separation_dev.wasserstein_distance:.4f},{profile.separation_test.wasserstein_distance:.4f}",
-    ]
-
-    sep_csv_path = out_path / "separation_metrics.csv"
-    _atomic_write_text(sep_csv_path, "\n".join(sep_lines) + "\n")
-
-    # 4. lexical_stats.json (machine-readable snapshot)
     json_data = {
         "dataset_name": profile.dataset_name,
         "lengths": {
@@ -573,8 +497,5 @@ def export_eda_artifacts(profile: LexicalProfile, output_dir: Path | str) -> Dic
     _atomic_write_text(json_path, json.dumps(json_data, indent=2) + "\n")
 
     return {
-        "length_summary_csv": length_csv_path,
-        "idf_coverage_csv": cov_csv_path,
-        "separation_metrics_csv": sep_csv_path,
         "lexical_stats_json": json_path,
     }

@@ -22,7 +22,11 @@ from rettune.eda import (
     sample_random_pairs,
     tokenize,
 )
-from rettune.viz import render_coverage_density, render_token_length_ecdf
+from rettune.viz import (
+    render_coverage_density,
+    render_summary_table,
+    render_token_length_ecdf,
+)
 import scripts.profile_lexical as profile_lexical_cli
 
 
@@ -209,9 +213,6 @@ def test_profile_dataset_and_export(synthetic_benchmark_config: BenchmarkConfig,
     out_dir = tmp_path / "eda_test_export"
     artifacts = export_eda_artifacts(profile, out_dir)
 
-    assert artifacts["length_summary_csv"].exists()
-    assert artifacts["idf_coverage_csv"].exists()
-    assert artifacts["separation_metrics_csv"].exists()
     assert artifacts["lexical_stats_json"].exists()
 
     # Verify JSON structure
@@ -247,9 +248,16 @@ def test_viz_rendering(synthetic_benchmark_config: BenchmarkConfig, tmp_path: Pa
     assert cov_figs["svg"].stat().st_size > 1000
     assert cov_figs["png"].stat().st_size > 1000
 
+    tbl_figs = render_summary_table(profiles, figures_dir)
+    assert tbl_figs["svg"].exists()
+    assert tbl_figs["png"].exists()
+    assert tbl_figs["svg"].stat().st_size > 1000
+    assert tbl_figs["png"].stat().st_size > 1000
+
     # Empty profiles guard
     assert render_token_length_ecdf({}, figures_dir) == {}
     assert render_coverage_density({}, figures_dir) == {}
+    assert render_summary_table({}, figures_dir) == {}
 
 
 def test_profile_lexical_cli_in_process(synthetic_benchmark_config: BenchmarkConfig, tmp_path: Path):
@@ -271,9 +279,6 @@ def test_profile_lexical_cli_in_process(synthetic_benchmark_config: BenchmarkCon
     ret_code = profile_lexical_cli.main(argv)
     assert ret_code == 0
 
-    # Verify CSV files created in results dir
+    # Verify JSON artifact created in results dir
     synth_eda_dir = tmp_path / "results" / "eda" / "synthetic"
-    assert (synth_eda_dir / "length_summary.csv").exists()
-    assert (synth_eda_dir / "idf_coverage.csv").exists()
-    assert (synth_eda_dir / "separation_metrics.csv").exists()
     assert (synth_eda_dir / "lexical_stats.json").exists()
