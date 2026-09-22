@@ -1,18 +1,32 @@
 """Command-line interface and execution dispatcher for RetTune.
 
 Provides a unified root CLI for offline hybrid search benchmark sweeps,
-enforcing strict zero-network execution and fail-fast offline readiness checks.
+enforcing strict zero-network execution, fail-fast offline readiness checks,
+and clean stage orchestration.
 """
 
 import argparse
 import logging
+import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
+
+from rich.console import Console
 
 from rettune.config import BenchmarkConfig, load_config
+from rettune.data_loader import ContractValidationError, DataLeakageError, load_dataset
+from rettune.eda import LexicalProfile, export_eda_artifacts, profile_dataset
+from rettune.viz import (
+    display_coverage_summary_table,
+    display_length_summary_table,
+    render_coverage_density,
+    render_summary_table,
+    render_token_length_ecdf,
+)
 
 logger = logging.getLogger("rettune.cli")
+console = Console()
 
 SUPPORTED_STAGES = ["eda", "all"]
 
@@ -28,8 +42,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--stage",
         choices=SUPPORTED_STAGES,
-        default="all",
-        help="Pipeline stage to execute ('eda', 'all').",
+        default=None,
+        help="Pipeline stage to execute ('eda', 'all'). Defaults to 'all' in offline benchmark mode.",
     )
     parser.add_argument(
         "--dataset",
@@ -163,6 +177,114 @@ def format_guard_failure_message(missing_by_dataset: Dict[str, List[Path]]) -> s
     return "\n".join(lines)
 
 
+def run_setup(args: argparse.Namespace, target_datasets: Sequence[str]) -> int:
+    """Execute dataset download/setup by delegating to scripts/download_data.py via subprocess."""
+    script_path = Path(__file__).resolve().parent.parent / "scripts" / "download_data.py"
+    if not script_path.exists():
+        logger.error("Download script not found at expected path: %s", script_path)
+        return 1
+
+    cmd = [sys.executable, str(script_path)]
+    if args.config:
+        cmd.extend(["--config", str(args.config)])
+    if args.force:
+        cmd.append("--force")
+    if args.verbose:
+        cmd.append("-v")
+
+    if args.dataset != "all":
+        cmd.extend(["--dataset", args.dataset])
+    else:
+        cmd.extend(["--dataset", "all"])
+
+    logger.info("Executing dataset setup via %s: %s", script_path.name, " ".join(cmd))
+    result = subprocess.run(cmd)
+    return result.returncode
+
+
+def run_stage_eda(
+    args: argparse.Namespace,
+    config: BenchmarkConfig,
+    target_datasets: Sequence[str],
+) -> int:
+    """Execute Stage 1.3 Lexical Dynamics & Vocabulary Overlap Profiling."""
+    profiles: Dict[str, LexicalProfile] = {}
+
+    for ds_name in target_datasets:
+        logger.info("=" * 60)
+        logger.info("RetTune Stage 1.3 EDA: Profiling '%s'", ds_name.upper())
+        logger.info("=" * 60)
+
+        try:
+            dataset = load_dataset(ds_name, config, verify=True)
+        except (ContractValidationError, DataLeakageError, FileNotFoundError) as exc:
+            logger.error("Data contract verification failed for '%s': %s", ds_name, exc)
+            return 1
+
+        threshold = config.datasets[ds_name].relevance_threshold
+
+        profile = profile_dataset(
+            dataset=dataset,
+            config=config.eda,
+            relevance_threshold=threshold,
+            seed=config.seed,
+        )
+        profiles[ds_name] = profile
+
+        out_dir = config.get_results_dir("eda", ds_name)
+        artifact_paths = export_eda_artifacts(profile, out_dir)
+        logger.info("Persisted artifacts to %s: %s", out_dir, [p.name for p in artifact_paths.values()])
+
+    # Display Rich console tables
+    console.print()
+    display_length_summary_table(profiles)
+    console.print()
+    display_coverage_summary_table(profiles)
+    console.print()
+
+    # Generate publication figures if requested
+    if args.plot and profiles:
+        figures_dir = config.paths.results_dir / "figures"
+        figures_dir.mkdir(parents=True, exist_ok=True)
+
+        logger.info("Generating comparative figures in %s...", figures_dir)
+        try:
+            len_figs = render_token_length_ecdf(profiles, figures_dir)
+            cov_figs = render_coverage_density(profiles, figures_dir)
+            tbl_figs = render_summary_table(profiles, figures_dir)
+            console.print(f"[bold green]✓ Figures successfully exported to {figures_dir}[/bold green]")
+            console.print(f"  - Length Distributions: {len_figs['svg'].name}, {len_figs['png'].name}")
+            console.print(f"  - Coverage Density:     {cov_figs['svg'].name}, {cov_figs['png'].name}")
+            console.print(f"  - Summary Tables:       {tbl_figs['svg'].name}, {tbl_figs['png'].name}")
+        except Exception as exc:
+            logger.error("Failed to render graphical figures: %s", exc)
+            return 1
+
+    return 0
+
+
+# Registry of benchmark pipeline stage handlers
+StageHandler = Callable[[argparse.Namespace, BenchmarkConfig, Sequence[str]], int]
+STAGE_REGISTRY: Dict[str, StageHandler] = {
+    "eda": run_stage_eda,
+}
+
+
+def run_stage_all(
+    args: argparse.Namespace,
+    config: BenchmarkConfig,
+    target_datasets: Sequence[str],
+) -> int:
+    """Execute all registered pipeline stages in sequence."""
+    for stage_name, stage_fn in STAGE_REGISTRY.items():
+        logger.info("Executing benchmark stage: %s", stage_name.upper())
+        ret = stage_fn(args, config, target_datasets)
+        if ret != 0:
+            logger.error("Benchmark stage '%s' failed with exit code %d", stage_name, ret)
+            return ret
+    return 0
+
+
 def setup_logging(verbose: bool = False) -> None:
     """Configure console logging level and format."""
     level = logging.DEBUG if verbose else logging.INFO
@@ -195,12 +317,32 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         logger.error("Configuration initialization failed: %s", e)
         return 1
 
-    # Zero-Network Offline Preflight Check (bypassed only if --setup is explicitly passed)
-    if not args.setup:
-        is_ready, missing = verify_offline_readiness(target_datasets, config)
-        if not is_ready:
-            print(format_guard_failure_message(missing), file=sys.stderr)
-            return 1
+    # Setup mode: delegate to scripts/download_data.py
+    if args.setup:
+        setup_ret = run_setup(args, target_datasets)
+        if setup_ret != 0:
+            logger.error("Setup failed with exit code %d", setup_ret)
+            return setup_ret
+        if args.stage is None:
+            logger.info("Dataset setup completed successfully.")
+            return 0
 
-    logger.debug("Offline readiness verified for target datasets: %s", target_datasets)
-    return 0
+    # Offline Benchmark Mode: defaults to 'all' stages if not explicitly specified
+    stage_to_run = args.stage or "all"
+
+    # Enforce Zero-Network Offline Preflight Guard
+    is_ready, missing = verify_offline_readiness(target_datasets, config)
+    if not is_ready:
+        print(format_guard_failure_message(missing), file=sys.stderr)
+        return 1
+
+    logger.debug("Zero-network guard passed for datasets: %s. Executing stage: %s", target_datasets, stage_to_run)
+
+    # Dispatch to target stage
+    if stage_to_run == "all":
+        return run_stage_all(args, config, target_datasets)
+    elif stage_to_run in STAGE_REGISTRY:
+        return STAGE_REGISTRY[stage_to_run](args, config, target_datasets)
+    else:
+        logger.error("Unsupported pipeline stage '%s'. Supported: %s", stage_to_run, list(STAGE_REGISTRY.keys()))
+        return 1

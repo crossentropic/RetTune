@@ -2,6 +2,7 @@
 
 import argparse
 import socket
+import subprocess
 from pathlib import Path
 from typing import Sequence
 import pytest
@@ -22,7 +23,7 @@ def test_parser_defaults():
     parser = build_parser()
     args = parser.parse_args([])
 
-    assert args.stage == "all"
+    assert args.stage is None
     assert args.dataset == "all"
     assert args.config is None
     assert args.setup is False
@@ -161,5 +162,100 @@ def test_main_zero_network_socket_interception(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(socket.socket, "connect", guarded_connect)
 
     # Execution must pass without triggering guarded_connect
-    exit_code = main(["--dataset", "nfcorpus"])
+    exit_code = main(["--dataset", "nfcorpus", "--no-plot"])
     assert exit_code == 0
+
+
+def test_main_setup_delegates_to_subprocess(monkeypatch: pytest.MonkeyPatch):
+    """Verify --setup delegates to scripts/download_data.py via subprocess."""
+    called_cmds = []
+
+    def fake_subprocess_run(cmd, *args, **kwargs):
+        called_cmds.append(cmd)
+        class FakeResult:
+            returncode = 0
+        return FakeResult()
+
+    monkeypatch.setattr(subprocess, "run", fake_subprocess_run)
+
+    exit_code = main(["--setup", "--dataset", "nfcorpus", "--force"])
+    assert exit_code == 0
+    assert len(called_cmds) == 1
+
+    invoked_cmd = called_cmds[0]
+    assert "download_data.py" in invoked_cmd[1]
+    assert "--dataset" in invoked_cmd
+    assert "nfcorpus" in invoked_cmd
+    assert "--force" in invoked_cmd
+
+
+def test_main_setup_failure_returns_error_code(monkeypatch: pytest.MonkeyPatch):
+    """Verify --setup failure propagates returncode properly."""
+    def fake_failing_run(cmd, *args, **kwargs):
+        class FakeResult:
+            returncode = 42
+        return FakeResult()
+
+    monkeypatch.setattr(subprocess, "run", fake_failing_run)
+
+    exit_code = main(["--setup", "--dataset", "nfcorpus"])
+    assert exit_code == 42
+
+
+def test_main_runs_stage_eda_offline(tmp_path: Path):
+    """Verify main() executes Stage 1 EDA end-to-end offline on nfcorpus."""
+    results_dir = tmp_path / "results"
+    exit_code = main([
+        "--stage", "eda",
+        "--dataset", "nfcorpus",
+        "--results-dir", str(results_dir),
+        "--no-plot",
+    ])
+    assert exit_code == 0
+
+    # Verify artifacts were generated
+    eda_json = results_dir / "eda" / "nfcorpus" / "lexical_stats.json"
+    assert eda_json.exists()
+    assert eda_json.stat().st_size > 0
+
+
+def test_main_runs_stage_all_offline(tmp_path: Path):
+    """Verify main() executes all registered stages (currently EDA) offline."""
+    results_dir = tmp_path / "results"
+    exit_code = main([
+        "--stage", "all",
+        "--dataset", "nfcorpus",
+        "--results-dir", str(results_dir),
+        "--no-plot",
+    ])
+    assert exit_code == 0
+
+    eda_json = results_dir / "eda" / "nfcorpus" / "lexical_stats.json"
+    assert eda_json.exists()
+
+
+def test_main_setup_then_stage_orchestration(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    """Verify --setup followed by --stage runs setup then proceeds to stage."""
+    setup_called = []
+
+    def fake_subprocess_run(cmd, *args, **kwargs):
+        setup_called.append(cmd)
+        class FakeResult:
+            returncode = 0
+        return FakeResult()
+
+    monkeypatch.setattr(subprocess, "run", fake_subprocess_run)
+
+    results_dir = tmp_path / "results"
+    exit_code = main([
+        "--setup",
+        "--stage", "eda",
+        "--dataset", "nfcorpus",
+        "--results-dir", str(results_dir),
+        "--no-plot",
+    ])
+
+    assert exit_code == 0
+    assert len(setup_called) == 1
+    assert (results_dir / "eda" / "nfcorpus" / "lexical_stats.json").exists()
+
