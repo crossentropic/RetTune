@@ -10,5 +10,6 @@ datasets>=3.0.0
 huggingface-hub>=0.25.0
 pyarrow>=20.0.0
 bm25s>=0.3.0
+matplotlib>=3.8.0
 pytest>=8.0.0
 pytest-cov>=4.1.0

@@ -44,6 +44,7 @@ data/**/*.faiss
 results/runs/
 results/figures/
 results/intermediate/
+results/eda/*/
 *.npy
 *.npz
 
