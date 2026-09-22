@@ -3,6 +3,7 @@
 import argparse
 import socket
 import subprocess
+import sys
 from pathlib import Path
 from typing import Sequence
 import pytest
@@ -258,4 +259,39 @@ def test_main_setup_then_stage_orchestration(monkeypatch: pytest.MonkeyPatch, tm
     assert exit_code == 0
     assert len(setup_called) == 1
     assert (results_dir / "eda" / "nfcorpus" / "lexical_stats.json").exists()
+
+
+def test_benchmark_executable_help():
+    """Verify python benchmark.py --help succeeds via subprocess."""
+    repo_root = Path(__file__).resolve().parent.parent
+    benchmark_script = repo_root / "benchmark.py"
+
+    res = subprocess.run(
+        [sys.executable, str(benchmark_script), "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert res.returncode == 0
+    assert "RetTune" in res.stdout
+    assert "--stage" in res.stdout
+    assert "--dataset" in res.stdout
+    assert "--setup" in res.stdout
+
+
+def test_benchmark_executable_missing_data_exit_1(tmp_path: Path):
+    """Verify python benchmark.py halts with code 1 on missing data in subprocess."""
+    repo_root = Path(__file__).resolve().parent.parent
+    benchmark_script = repo_root / "benchmark.py"
+    empty_dir = tmp_path / "empty_data"
+    empty_dir.mkdir()
+
+    res = subprocess.run(
+        [sys.executable, str(benchmark_script), "--dataset", "nfcorpus", "--data-dir", str(empty_dir)],
+        capture_output=True,
+        text=True,
+    )
+    assert res.returncode == 1
+    assert "ZERO-NETWORK GUARD FAILURE" in res.stderr
+    assert "python benchmark.py --setup" in res.stderr
+
 
