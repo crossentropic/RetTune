@@ -1,5 +1,6 @@
 """RetTune: Reproducible Hybrid Search Benchmark Testbed."""
 
+from .cli import build_parser, main, verify_offline_readiness
 from .config import BenchmarkConfig, DatasetConfig, EDAConfig, PathsConfig, load_config
 from .data_loader import (
     ContractValidationError,
@@ -30,4 +31,7 @@ __all__ = [
     "load_queries",
     "verify_dataset_contract",
     "verify_split_leakage",
+    "build_parser",
+    "main",
+    "verify_offline_readiness",
 ]
