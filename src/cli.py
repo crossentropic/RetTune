@@ -70,6 +70,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Force re-download during setup even if dataset files are already cached.",
     )
     parser.add_argument(
+        "--relevance-threshold",
+        type=float,
+        default=None,
+        help="Relevance score threshold for positive pairs (overrides dataset config if provided).",
+    )
+    parser.add_argument(
         "--plot",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -177,7 +183,7 @@ def format_guard_failure_message(missing_by_dataset: Dict[str, List[Path]]) -> s
     return "\n".join(lines)
 
 
-def run_setup(args: argparse.Namespace, target_datasets: Sequence[str]) -> int:
+def run_setup(args: argparse.Namespace) -> int:
     """Execute dataset download/setup by delegating to scripts/download_data.py via subprocess."""
     script_path = Path(__file__).resolve().parent.parent / "scripts" / "download_data.py"
     if not script_path.exists():
@@ -187,6 +193,8 @@ def run_setup(args: argparse.Namespace, target_datasets: Sequence[str]) -> int:
     cmd = [sys.executable, str(script_path)]
     if args.config:
         cmd.extend(["--config", str(args.config)])
+    if args.data_dir:
+        cmd.extend(["--data-dir", str(args.data_dir)])
     if args.force:
         cmd.append("--force")
     if args.verbose:
@@ -221,7 +229,11 @@ def run_stage_eda(
             logger.error("Data contract verification failed for '%s': %s", ds_name, exc)
             return 1
 
-        threshold = config.datasets[ds_name].relevance_threshold
+        threshold = (
+            args.relevance_threshold
+            if getattr(args, "relevance_threshold", None) is not None
+            else config.datasets[ds_name].relevance_threshold
+        )
 
         profile = profile_dataset(
             dataset=dataset,
@@ -319,7 +331,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     # Setup mode: delegate to scripts/download_data.py
     if args.setup:
-        setup_ret = run_setup(args, target_datasets)
+        setup_ret = run_setup(args)
         if setup_ret != 0:
             logger.error("Setup failed with exit code %d", setup_ret)
             return setup_ret

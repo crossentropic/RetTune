@@ -47,6 +47,7 @@ def test_parser_custom_flags(tmp_path: Path):
         "--config", str(custom_cfg),
         "--setup",
         "--force",
+        "--relevance-threshold", "2.5",
         "--no-plot",
         "--data-dir", str(tmp_path / "data"),
         "--results-dir", str(tmp_path / "results"),
@@ -58,6 +59,7 @@ def test_parser_custom_flags(tmp_path: Path):
     assert args.config == custom_cfg
     assert args.setup is True
     assert args.force is True
+    assert args.relevance_threshold == 2.5
     assert args.plot is False
     assert args.data_dir == tmp_path / "data"
     assert args.results_dir == tmp_path / "results"
@@ -149,26 +151,36 @@ def test_main_zero_network_guard_fails_fast_on_missing_data(tmp_path: Path, caps
     assert "python benchmark.py --setup" in captured.err
 
 
-def test_main_zero_network_guard_passes_on_valid_data():
-    """Verify main() returns 0 on existing local dataset."""
-    exit_code = main(["--dataset", "nfcorpus"])
+def test_main_zero_network_guard_passes_on_valid_data(tmp_path: Path):
+    """Verify main() returns 0 on existing local dataset without mutating production results."""
+    results_dir = tmp_path / "results"
+    exit_code = main([
+        "--dataset", "nfcorpus",
+        "--results-dir", str(results_dir),
+        "--no-plot",
+    ])
     assert exit_code == 0
 
 
-def test_main_zero_network_socket_interception(monkeypatch: pytest.MonkeyPatch):
+def test_main_zero_network_socket_interception(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """Strictly assert zero network connection attempts during offline benchmark run."""
     def guarded_connect(*args, **kwargs):
         raise RuntimeError("UNAUTHORIZED NETWORK ACCESS: Attempted socket connection in offline mode.")
 
     monkeypatch.setattr(socket.socket, "connect", guarded_connect)
 
+    results_dir = tmp_path / "results"
     # Execution must pass without triggering guarded_connect
-    exit_code = main(["--dataset", "nfcorpus", "--no-plot"])
+    exit_code = main([
+        "--dataset", "nfcorpus",
+        "--results-dir", str(results_dir),
+        "--no-plot",
+    ])
     assert exit_code == 0
 
 
 def test_main_setup_delegates_to_subprocess(monkeypatch: pytest.MonkeyPatch):
-    """Verify --setup delegates to scripts/download_data.py via subprocess."""
+    """Verify --setup delegates to scripts/download_data.py via subprocess, forwarding all options."""
     called_cmds = []
 
     def fake_subprocess_run(cmd, *args, **kwargs):
@@ -179,7 +191,7 @@ def test_main_setup_delegates_to_subprocess(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(subprocess, "run", fake_subprocess_run)
 
-    exit_code = main(["--setup", "--dataset", "nfcorpus", "--force"])
+    exit_code = main(["--setup", "--dataset", "nfcorpus", "--force", "--data-dir", "/custom/data"])
     assert exit_code == 0
     assert len(called_cmds) == 1
 
@@ -188,6 +200,8 @@ def test_main_setup_delegates_to_subprocess(monkeypatch: pytest.MonkeyPatch):
     assert "--dataset" in invoked_cmd
     assert "nfcorpus" in invoked_cmd
     assert "--force" in invoked_cmd
+    assert "--data-dir" in invoked_cmd
+    assert "/custom/data" in invoked_cmd
 
 
 def test_main_setup_failure_returns_error_code(monkeypatch: pytest.MonkeyPatch):
