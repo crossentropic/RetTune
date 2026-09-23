@@ -409,3 +409,16 @@ def test_is_dataset_cached_and_valid(mock_load, tmp_path: Path):
     # When load_dataset raises, returns False
     mock_load.side_effect = ValueError("Schema mismatch")
     assert is_dataset_cached_and_valid("test_ds", cfg) is False
+
+
+@patch("scripts.download_data.download_dataset")
+def test_main_data_dir_resolves_to_absolute_path(mock_download: MagicMock, tmp_path: Path):
+    """Verify CLI --data-dir resolves relative paths to absolute paths."""
+    argv = ["--dataset", "nfcorpus", "--data-dir", "relative_data_dir"]
+    ret = main(argv)
+    assert ret == 0
+    assert mock_download.called
+    called_config = mock_download.call_args[0][1]
+    assert called_config.paths.data_dir.is_absolute()
+    assert called_config.paths.data_dir == Path("relative_data_dir").resolve()
+
