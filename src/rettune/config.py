@@ -119,7 +119,7 @@ def find_default_config() -> Path:
     if cwd_candidate.exists():
         return cwd_candidate.resolve()
 
-    repo_candidate = Path(__file__).resolve().parent.parent / "configs" / "benchmark_config.yaml"
+    repo_candidate = Path(__file__).resolve().parents[2] / "configs" / "benchmark_config.yaml"
     if repo_candidate.exists():
         return repo_candidate.resolve()
 

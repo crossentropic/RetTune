@@ -207,7 +207,7 @@ def test_find_default_config_from_subdir(tmp_path: Path, monkeypatch: pytest.Mon
 
 def test_dataset_config_strict_text_disjointness_default():
     """Verify DatasetConfig schema defaults strict_text_disjointness and doc referential integrity to True."""
-    from src.config import DatasetConfig
+    from rettune.config import DatasetConfig
     cfg = DatasetConfig(
         name="custom_ds",
         hf_repo="test/custom",
