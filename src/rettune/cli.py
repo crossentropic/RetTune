@@ -185,7 +185,7 @@ def format_guard_failure_message(missing_by_dataset: Dict[str, List[Path]]) -> s
 
 def run_setup(args: argparse.Namespace) -> int:
     """Execute dataset download/setup by delegating to scripts/download_data.py via subprocess."""
-    script_path = Path(__file__).resolve().parent.parent / "scripts" / "download_data.py"
+    script_path = Path(__file__).resolve().parents[2] / "scripts" / "download_data.py"
     if not script_path.exists():
         logger.error("Download script not found at expected path: %s", script_path)
         return 1

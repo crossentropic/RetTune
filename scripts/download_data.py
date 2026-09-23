@@ -16,14 +16,17 @@ import random
 import sys
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Set, Tuple
 
-# Ensure repository root is on sys.path for direct script execution
-REPO_ROOT = Path(__file__).resolve().parent.parent
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+# Ensure src directory is available on sys.path for direct script execution
+try:
+    from rettune.config import BenchmarkConfig, DatasetConfig, PathsConfig, load_config
+except ModuleNotFoundError:
+    src_dir = Path(__file__).resolve().parent.parent / "src"
+    if str(src_dir) not in sys.path:
+        sys.path.insert(0, str(src_dir))
+    from rettune.config import BenchmarkConfig, DatasetConfig, PathsConfig, load_config
 
 from datasets import load_dataset as hf_load_dataset
 
-from rettune.config import BenchmarkConfig, DatasetConfig, PathsConfig, load_config
 from rettune.data_loader import (
     ContractValidationError,
     DataLeakageError,
