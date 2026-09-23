@@ -19,21 +19,27 @@ from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Set,
 # Ensure src directory is available on sys.path for direct script execution
 try:
     from rettune.config import BenchmarkConfig, DatasetConfig, PathsConfig, load_config
+    from rettune.data_loader import (
+        ContractValidationError,
+        DataLeakageError,
+        IRDataset,
+        load_dataset,
+        load_queries,
+    )
 except ModuleNotFoundError:
     src_dir = Path(__file__).resolve().parent.parent / "src"
     if str(src_dir) not in sys.path:
         sys.path.insert(0, str(src_dir))
     from rettune.config import BenchmarkConfig, DatasetConfig, PathsConfig, load_config
+    from rettune.data_loader import (
+        ContractValidationError,
+        DataLeakageError,
+        IRDataset,
+        load_dataset,
+        load_queries,
+    )
 
 from datasets import load_dataset as hf_load_dataset
-
-from rettune.data_loader import (
-    ContractValidationError,
-    DataLeakageError,
-    IRDataset,
-    load_dataset,
-    load_queries,
-)
 
 logger = logging.getLogger("rettune.download")
 
@@ -520,7 +526,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         config = load_config(args.config)
         if args.data_dir:
             config = config.model_copy(
-                update={"paths": PathsConfig(data_dir=Path(args.data_dir), results_dir=config.paths.results_dir)}
+                update={"paths": PathsConfig(data_dir=Path(args.data_dir).resolve(), results_dir=config.paths.results_dir)}
             )
 
         if args.dataset == "all":
