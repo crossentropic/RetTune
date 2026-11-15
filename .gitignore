@@ -1,0 +1,56 @@
+# Byte-compiled / optimized / ambient files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Testing and linters
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# RetTune artifact caches
+# Allow tracking raw text & qrels in data/, plus benchmark results in results/{eda,metrics,figures}/
+data/**/embeddings/
+data/**/reranker_cache/
+data/**/*.npy
+data/**/*.npz
+data/**/*.faiss
+
+# Results runtime scratch caches
+results/runs/
+results/intermediate/
+*.npy
+*.npz
+
+# Keep directory placeholders
+!results/**/.gitkeep
+
+# IDE and OS
+.DS_Store
+.vscode/
+.idea/
